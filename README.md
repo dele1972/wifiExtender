@@ -13,13 +13,23 @@ Based on `ExampleRangeExtender-NAPT`
   - look at WiFi Multi
     - https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/readme.html#wifi-multi
     - to connect to a WiFi network with strongest WiFi signal (RSSI)
-  - **look at Memory requirements**
+  - look at Memory requirements - DONE
     - https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/bearssl-client-secure-class.html#memory-requirements
+    - TLS with MFLN
+      - TLS benötigt eigentlich einen Buffer von 16KB zum Senden und Empfangen (scheinbar jeweils!)
+      - ESP8266 hat aber nur einen heap von 40KB
+      - Mit MFLN kann man kann den Buffer zum Senden auf etwas mehr als 512 bytes reduzieren
+      - Der Buffer zum Empfangen kann jedoch nicht reduziert werden und bleibt bei 16KB
+      - Nebenbei: NAPT benötigt scheinbar ca. 12552 bytes
+      - [ReadTheDocs: MFLN (Saving RAM)](https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/bearssl-client-secure-class.html#mfln-or-maximum-fragment-length-negotiation-saving-ram)
+      - [Example](https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266WiFi/examples/BearSSL_MaxFragmentLength/BearSSL_MaxFragmentLength.ino)
+    - **BUT**
+      - my Webhoster doesn't support this :(
 - lwip/napt.h
   - Network Address and Port Translation
   - https://github.com/esp8266/Arduino/blob/master/tools/sdk/lwip2/include/lwip/napt.h
   - **look at heap!**
-    - in my case 12.880 (before: 36.104, after: 12.880)
+    - in my case 12.880 (before: 36.104, after: 23.224)
     - after connecting to a Webserver by WiFiClientSecure is only 12.552 available (in my case)
 
 ## current Problems

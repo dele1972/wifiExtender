@@ -1,4 +1,3 @@
-
 // NAPT example released to public domain
 // Based on `ExampleRangeExtender-NAPT` example
 
@@ -24,15 +23,19 @@ long rssi;                     // signal strength of current wlan connection in 
 
 #include <ESP8266WiFi.h>      // to create a WiFi Client (https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/readme.html)
 #include <WiFiClientSecure.h> // see expl.: https://github.com/espressif/arduino-esp32/blob/master/libraries/WiFiClientSecure/examples/WiFiClientSecure/WiFiClientSecure.ino
-WiFiClientSecure client;       // ssl supporting client (ex. from https://arduino-esp8266.readthedocs.io/en/2.5.2/esp8266wifi/client-secure-examples.html)
+//WiFiClientSecure client;       // ssl supporting client (ex. from https://arduino-esp8266.readthedocs.io/en/2.5.2/esp8266wifi/client-secure-examples.html)
+BearSSL::WiFiClientSecure client;
+
 /* HOST Connection Settings */
 const char* host                           = HostConstants::DATA_HOST;
 const char* url                            = HostConstants::URL_DATAHOME;
-//const uint16_t port                        = 443;                         // Port to start with SSL (https) connection
-unsigned short port                        = 443;                         // Port to start with SSL (https) connection
-unsigned char MYROOT_CA[sizeof(ROOT_CA)-1] = {};                          // this will be filled later with my root certificate (ssl)
-
+unsigned short port                        = HostConstants::SSL_PORT;                      // Port to start with SSL (https) connection
+//unsigned short port                        = 443;                         // Port to start with SSL (https) connection
 //#define MYROOT_CA ROOT_CA
+unsigned char MYROOT_CA[sizeof(ROOT_CA)-1] = {};                          // this will be filled later with my root certificate (ssl) and consumes much less heap than #define!
+const char *ssid = STASSID;
+const char *pass = STAPSK;
+
 
 
 #include <lwip/napt.h>        // Network Address and Port Translation (https://github.com/esp8266/Arduino/blob/master/tools/sdk/lwip2/include/lwip/napt.h)
@@ -45,27 +48,31 @@ unsigned char MYROOT_CA[sizeof(ROOT_CA)-1] = {};                          // thi
 #define NAPT_PORT IP_PORTMAP_MAX          // set max 32 portmap entries in the NAPT table
 
 #if HAVE_NETDUMP
-
-#include <NetDump.h>
-
-void dump(int netif_idx, const char* data, size_t len, int out, int success) {
-  (void)success;
-  Serial.print(out ? F("out ") : F(" in "));
-  Serial.printf("%d ", netif_idx);
-
-  // optional filter example: if (netDump_is_ARP(data))
-  {
-    netDump(Serial, data, len);
-    //netDumpHex(Serial, data, len);
+  #include <NetDump.h>
+  void dump(int netif_idx, const char* data, size_t len, int out, int success) {
+    (void)success;
+    Serial.print(out ? F("out ") : F(" in "));
+    Serial.printf("%d ", netif_idx);
+  
+    // optional filter example: if (netDump_is_ARP(data))
+    {
+      netDump(Serial, data, len);
+      //netDumpHex(Serial, data, len);
+    }
   }
-}
 #endif
 
 void setup() {
   Serial.begin(115200);
 
+  Serial.printf("Heap before copy CA: %d\n", ESP.getFreeHeap());
   copyCertificate();
+  Serial.printf("Heap after copy CA: %d\n\n\n", ESP.getFreeHeap());
+
+
+  Serial.printf("Heap before get Time: %d\n", ESP.getFreeHeap());
   getCurrentTime();
+  Serial.printf("Heap before get Time: %d\n\n\n", ESP.getFreeHeap());
   
   Serial.printf("\n\nNAPT Range extender\n");
   Serial.printf("Heap on start: %d\n", ESP.getFreeHeap());
@@ -75,7 +82,9 @@ void setup() {
 #endif
 
 
+  Serial.printf("Heap before WiFi Station connect: %d\n", ESP.getFreeHeap());
   connectWifiStation();
+  Serial.printf("Heap after WiFi Station connect: %d\n\n\n", ESP.getFreeHeap());
 
 
   // give DNS servers to AP side
@@ -83,14 +92,20 @@ void setup() {
   dhcps_set_dns(1, WiFi.dnsIP(1));
 
 
+  Serial.printf("Heap before start access point: %d\n", ESP.getFreeHeap());
   startAccessPoint();
+  Serial.printf("Heap after start access point: %d\n\n\n", ESP.getFreeHeap());
 
   
   // Webserver connection disabled
-  // connectWebserver();
+  Serial.printf("Heap before Webserver connection: %d\n", ESP.getFreeHeap());
+  connectWebserver();
+  Serial.printf("Heap after Webserver connection: %d\n\n\n", ESP.getFreeHeap());
 
   
-  startNaptRouting();
+  //Serial.printf("Heap before start NAPT routing: %d\n", ESP.getFreeHeap());
+  //startNaptRouting();
+  //Serial.printf("Heap after start NAPT routing: %d\n", ESP.getFreeHeap());
 }
 
 #else
@@ -112,20 +127,21 @@ void loop() {
   
 */
   /* if the server disconnected, stop the client */
-/*
+
   if (!client.connected()) {
       Serial.println();
       Serial.println("Server disconnected");
       client.stop();
   }
-*/
+
+  //yield();
 
   /* shut down to deepsleep mode (NodeMCU: GPIO16[labeledD0] connect to RST)) */
 /*
   Serial.println("\n\n   *** Shut Down *** \n\n");
-  
-  // delay(5 * 60000);                 // execute once every 5 minutes, don't flood remote service
-  delay(1 * 60000);                 // execute once every minute, don't flood remote service
+  */
+  delay(5 * 60000);                 // execute once every 5 minutes, don't flood remote service
+  /*delay(1 * 60000);                 // execute once every minute, don't flood remote service
   // ESP.deepSleep(5 * 60 * 1000000);  // deepsleep for 5 Minutes
 */
 }
