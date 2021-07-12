@@ -25,6 +25,15 @@ Based on `ExampleRangeExtender-NAPT`
       - [Example](https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266WiFi/examples/BearSSL_MaxFragmentLength/BearSSL_MaxFragmentLength.ino)
     - **BUT**
       - my Webhoster doesn't support this :(
+  - napt und webconnect funktioniert nun, wichtig sind folgende Werte:
+    - `#define NAPT 64`, set max 64 (IP) entries in the NAPT table
+    - `#define NAPT_PORT 32`, set max 32 portmap entries in the NAPT table
+    - @TODO: genauer gucken was das bewirkt. Sind damit ganze Einträge gemeint oder z.B. bei der IP Adresse lediglich ein Tuple einer IP?
+  - look at webconnect
+    - aktuell funktioniert nur ein connect/POST, im nächsten loop ist der client weg - bei einem reconnect führt das zu einer exception
+    - vielleicht hilft **TLS Session**
+      - https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/bearssl-client-secure-class.html#sessions-resuming-connections-fast
+      - https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266WiFi/examples/BearSSL_Sessions/BearSSL_Sessions.ino
 - lwip/napt.h
   - Network Address and Port Translation
   - https://github.com/esp8266/Arduino/blob/master/tools/sdk/lwip2/include/lwip/napt.h

@@ -1,51 +1,51 @@
 // NAPT example released to public domain
 // Based on `ExampleRangeExtender-NAPT` example
 
-#include <Dele72.h>           // provides some 'secret' constants @TODO: you can delete this line
+#include <Dele72.h>            // provides some 'secret' constants @TODO: you can delete this line
 
-const uint16_t deviceID = 3;                                  // Device/Placement ID (0 to +65,535)
-long rssi;                     // signal strength of current wlan connection in dBm
+const uint16_t DEVICE_ID = 3;  // Device/Placement ID (0 to +65,535)
 
 
 #if LWIP_FEATURES && !LWIP_IPV6
 
 #define HAVE_NETDUMP 0
 
+
+/* WiFi */
 #ifndef STASSID
-#define STASSID WlanConstants::SSID_DEVA
-#define STAPSK  WlanConstants::WIFIPASSWORD
+  #define STASSID WlanConstants::SSID_DEVA      // SSID of AP to connect to (const char*)
+  #define STAPSK  WlanConstants::WIFIPASSWORD   // Password of AP to connect to (const char*)
 #endif
 
 #ifndef APSSID
-#define APSSID WlanConstants::SSID_DEVADEV
-#define APPSK  WlanConstants::WIFIPASSWORD
+  #define APSSID WlanConstants::SSID_DEVADEV    // SSID of AP to create (const char*)
+  #define APPSK  WlanConstants::WIFIPASSWORD    // Password of AP to create (const char*)
 #endif
 
-#include <ESP8266WiFi.h>      // to create a WiFi Client (https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/readme.html)
-#include <WiFiClientSecure.h> // see expl.: https://github.com/espressif/arduino-esp32/blob/master/libraries/WiFiClientSecure/examples/WiFiClientSecure/WiFiClientSecure.ino
-//WiFiClientSecure client;       // ssl supporting client (ex. from https://arduino-esp8266.readthedocs.io/en/2.5.2/esp8266wifi/client-secure-examples.html)
-BearSSL::WiFiClientSecure client;
+#include <ESP8266WiFi.h>          // to create a WiFi Client (https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/readme.html)
+long rssi;                        // signal strength of current wlan connection in dBm
 
-/* HOST Connection Settings */
-const char* host                           = HostConstants::DATA_HOST;
-const char* url                            = HostConstants::URL_DATAHOME;
-unsigned short port                        = HostConstants::SSL_PORT;                      // Port to start with SSL (https) connection
-//unsigned short port                        = 443;                         // Port to start with SSL (https) connection
-//#define MYROOT_CA ROOT_CA
-unsigned char MYROOT_CA[sizeof(ROOT_CA)-1] = {};                          // this will be filled later with my root certificate (ssl) and consumes much less heap than #define!
-const char *ssid = STASSID;
-const char *pass = STAPSK;
-
-
-
-#include <lwip/napt.h>        // Network Address and Port Translation (https://github.com/esp8266/Arduino/blob/master/tools/sdk/lwip2/include/lwip/napt.h)
+#include <lwip/napt.h>            // Network Address and Port Translation (https://github.com/esp8266/Arduino/blob/master/tools/sdk/lwip2/include/lwip/napt.h)
 #include <lwip/dns.h>
 #include <dhcpserver.h>
 
-// #define NAPT 1000             // set max 1.000 (IP) entries in the NAPT table
-// #define NAPT_PORT 10          // set max 10 portmap entries in the NAPT table
-#define NAPT IP_NAPT_MAX             // set max 512 (IP) entries in the NAPT table
-#define NAPT_PORT IP_PORTMAP_MAX          // set max 32 portmap entries in the NAPT table
+#define NAPT 64                   // set max 64 (IP) entries in the NAPT table
+#define NAPT_PORT 32              // set max 32 portmap entries in the NAPT table
+// #define NAPT 1000                 // set max 1.000 (IP) entries in the NAPT table
+// #define NAPT_PORT 10              // set max 10 portmap entries in the NAPT table
+// #define NAPT IP_NAPT_MAX          // set max 512 (IP) entries in the NAPT table
+// #define NAPT_PORT IP_PORTMAP_MAX  // set max 32 portmap entries in the NAPT table
+
+
+/* HOST Connection Settings */
+#include <WiFiClientSecure.h>     // see expl.: https://github.com/espressif/arduino-esp32/blob/master/libraries/WiFiClientSecure/examples/WiFiClientSecure/WiFiClientSecure.ino
+BearSSL::WiFiClientSecure client; // ssl supporting client (ex. from https://arduino-esp8266.readthedocs.io/en/2.5.2/esp8266wifi/client-secure-examples.html)
+                                  // HostConstants::DATA_HOST     host + domain definition to POST to (const char*) - Dele72.h
+                                  // HostConstants::URL_DATAHOME  url definition to POST to (const char*) - Dele72.h
+                                  // HostConstants::SSL_PORT      Port to start with SSL (https) connection (const unsigned short) - Dele72.h
+                                  // ROOT_CA                      the root CA certificate (unsigned char[]) - Dele72.h
+
+
 
 #if HAVE_NETDUMP
   #include <NetDump.h>
@@ -64,10 +64,6 @@ const char *pass = STAPSK;
 
 void setup() {
   Serial.begin(115200);
-
-  Serial.printf("Heap before copy CA: %d\n", ESP.getFreeHeap());
-  copyCertificate();
-  Serial.printf("Heap after copy CA: %d\n\n\n", ESP.getFreeHeap());
 
 
   Serial.printf("Heap before get Time: %d\n", ESP.getFreeHeap());
@@ -97,15 +93,14 @@ void setup() {
   Serial.printf("Heap after start access point: %d\n\n\n", ESP.getFreeHeap());
 
   
-  // Webserver connection disabled
+  Serial.printf("Heap before start NAPT routing: %d\n", ESP.getFreeHeap());
+  startNaptRouting();
+  Serial.printf("Heap after start NAPT routing: %d\n", ESP.getFreeHeap());
+
+  
   Serial.printf("Heap before Webserver connection: %d\n", ESP.getFreeHeap());
   connectWebserver();
   Serial.printf("Heap after Webserver connection: %d\n\n\n", ESP.getFreeHeap());
-
-  
-  //Serial.printf("Heap before start NAPT routing: %d\n", ESP.getFreeHeap());
-  //startNaptRouting();
-  //Serial.printf("Heap after start NAPT routing: %d\n", ESP.getFreeHeap());
 }
 
 #else
@@ -118,21 +113,31 @@ void setup() {
 #endif
 
 void loop() {
+  // reconnect to webserver will cause an exception
+  // @TODO maybe tls sessions will help
+  //   see
+  //   - https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/bearssl-client-secure-class.html#sessions-resuming-connections-fast
+  //   - https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266WiFi/examples/BearSSL_Sessions/BearSSL_Sessions.ino
+  
+  //Serial.printf("Heap before Webserver connection: %d\n", ESP.getFreeHeap());
   //connectWebserver();
+  //Serial.printf("Heap after Webserver connection: %d\n\n\n", ESP.getFreeHeap());
 
-/*
   if (client.connected()) {
     sendDataToHost();
+  } else {
+    Serial.println("\nData could'nt be sent, Server is disconnected!");
   }
-  
-*/
+
   /* if the server disconnected, stop the client */
 
+  /*
   if (!client.connected()) {
       Serial.println();
       Serial.println("Server disconnected");
-      client.stop();
+      // client.stop();
   }
+  */
 
   //yield();
 
@@ -140,6 +145,7 @@ void loop() {
 /*
   Serial.println("\n\n   *** Shut Down *** \n\n");
   */
+  Serial.println("\n\n   *** Wait *** \n\n");
   delay(5 * 60000);                 // execute once every 5 minutes, don't flood remote service
   /*delay(1 * 60000);                 // execute once every minute, don't flood remote service
   // ESP.deepSleep(5 * 60 * 1000000);  // deepsleep for 5 Minutes
@@ -228,17 +234,17 @@ void startNaptRouting() {
 
 }
 
-void copyCertificate() {
-  
-  /* copy Dele72.ROOT_CA to local MYROOT_CA */
-  for (int i = 0; i < sizeof(ROOT_CA); i++) {
-    MYROOT_CA[i] = ROOT_CA[i]; //copies UserInput in reverse to TempInput
-    // printf("%c", MYROOT_CA[i]);
-  }
-  MYROOT_CA[sizeof(ROOT_CA)] = '\0'; // adds NULL character at end  
-  //MYROOT_CA[sizeof(MYROOT_CA)] = '\0'; // adds NULL character at end  
-
-  }
+//void copyCertificate() {
+//  
+//  /* copy Dele72.ROOT_CA to local MYROOT_CA */
+//  for (int i = 0; i < sizeof(ROOT_CA); i++) {
+//    MYROOT_CA[i] = ROOT_CA[i]; //copies UserInput in reverse to TempInput
+//    // printf("%c", MYROOT_CA[i]);
+//  }
+//  MYROOT_CA[sizeof(ROOT_CA)] = '\0'; // adds NULL character at end  
+//  //MYROOT_CA[sizeof(MYROOT_CA)] = '\0'; // adds NULL character at end  
+//
+//  }
 
 void connectWebserver() {
 
@@ -252,7 +258,7 @@ void connectWebserver() {
 
 
   /* Connect to Server */
-  Serial.println(String("\n\nStarting connection to server...") + host);
+  Serial.print("\n\nStarting connection to server: "); Serial.println(HostConstants::DATA_HOST);
   //Serial.print("\n\n\nCount of MYROOT_CA: "); Serial.println(sizeof(MYROOT_CA)-1);
   //for (int i = 0; i < sizeof(MYROOT_CA); i++) {
   //  printf("%c", MYROOT_CA[i]);
@@ -261,12 +267,12 @@ void connectWebserver() {
   
   // client.setInsecure();  // https://github.com/esp8266/Arduino/issues/4826#issuecomment-491813938 BUT THEN THE CONNECTION BECOMES INSECURE!
   // client.setFingerprint(fingerprint);  // The use of validating by Fingerprint isn't recommended because the fingerprint will be renewed more often than the certificate and then the fingerprint has to be updated
-  client.setCACert(MYROOT_CA, sizeof(MYROOT_CA)-1); // https://stackoverflow.com/a/56203388
+  client.setCACert(ROOT_CA, sizeof(ROOT_CA)-1); // https://stackoverflow.com/a/56203388
   Serial.println("\n\nCONNECTING...");
 int returnVal = 0;
-  returnVal = client.connect(host, port);
+  returnVal = client.connect(HostConstants::DATA_HOST, HostConstants::SSL_PORT);
   Serial.print("\n\n... returnVal: "); Serial.println(returnVal);
-  //if (!client.connect(host, port)) {
+  //if (!client.connect(HostConstants::DATA_HOST, HostConstants::SSL_PORT)) {
   if (!returnVal) {
     
     Serial.println("connection failed");
@@ -282,7 +288,7 @@ int returnVal = 0;
   /* Verify Server */
 
   // Verify validity of server's certificate
-  if (client.verifyCertChain(host)) {
+  if (client.verifyCertChain(HostConstants::DATA_HOST)) {
 
     Serial.println("Server certificate verified");
   } else {
@@ -291,7 +297,7 @@ int returnVal = 0;
     return;
   }
   /*
-  if (client.verify(fingerprint, host)) {
+  if (client.verify(fingerprint, HostConstants::DATA_HOST)) {
   
     Serial.println("certificate matches");
 
@@ -314,7 +320,7 @@ void sendDataToHost() {
   
   //    char* localip = (String) WiFi.localIP();
   //        + "&ip="            + (String) WiFi.localIP()
-  String DataToSend = "DEVICE="           + (String) deviceID
+  String DataToSend = "DEVICE="           + (String) DEVICE_ID
                     + "&SSID="            + (String) STASSID
                     + "&RSSI="            + (String) rssi
                     + "&HUMIDITY="        + (String) STASSID
@@ -326,8 +332,8 @@ void sendDataToHost() {
 
   /* create HTTP POST request */
   
-  client.println(String("POST ") + url + " HTTP/1.1");
-  client.println(String("Host: ") + host);                 
+  client.print("POST "); client.print(HostConstants::URL_DATAHOME); client.println(" HTTP/1.1");
+  client.print("Host: "); client.println(HostConstants::DATA_HOST);
   client.println("Content-Type: application/x-www-form-urlencoded");
   client.println("User-Agent: ESP8266/1.0");
   client.println(String("Content-Length: ") + DataToSend.length());
