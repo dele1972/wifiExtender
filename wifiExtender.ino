@@ -44,8 +44,8 @@ BearSSL::WiFiClientSecure client; // ssl supporting client (ex. from https://ard
                                   // HostConstants::URL_DATAHOME  url definition to POST to (const char*) - Dele72.h
                                   // HostConstants::SSL_PORT      Port to start with SSL (https) connection (const unsigned short) - Dele72.h
                                   // ROOT_CA                      the root CA certificate (unsigned char[]) - Dele72.h
-
-
+BearSSL::Session session;
+BearSSL::X509List cert(ROOT_CA, sizeof(ROOT_CA)-1);
 
 #if HAVE_NETDUMP
   #include <NetDump.h>
@@ -98,7 +98,11 @@ void setup() {
   Serial.printf("Heap after start NAPT routing: %d\n", ESP.getFreeHeap());
 
   
+  // connect to Webserver to initialize a TLS Session
+  // (without a TLS Session the Webserverconnection at the loop() will cause an heap exception)
   Serial.printf("Heap before Webserver connection: %d\n", ESP.getFreeHeap());
+  client.setSession(&session);
+  client.setTrustAnchors(&cert);
   connectWebserver();
   Serial.printf("Heap after Webserver connection: %d\n\n\n", ESP.getFreeHeap());
 }
@@ -113,16 +117,15 @@ void setup() {
 #endif
 
 void loop() {
-  // reconnect to webserver will cause an exception
-  // @TODO maybe tls sessions will help
-  //   see
-  //   - https://arduino-esp8266.readthedocs.io/en/latest/esp8266wifi/bearssl-client-secure-class.html#sessions-resuming-connections-fast
-  //   - https://github.com/esp8266/Arduino/blob/master/libraries/ESP8266WiFi/examples/BearSSL_Sessions/BearSSL_Sessions.ino
-  
-  //Serial.printf("Heap before Webserver connection: %d\n", ESP.getFreeHeap());
-  //connectWebserver();
-  //Serial.printf("Heap after Webserver connection: %d\n\n\n", ESP.getFreeHeap());
 
+  // reconnect to webserver by using the TLS Session
+  if (!client.connected()) {
+    Serial.printf("Heap before Webserver RECONNECTION with session: %d\n", ESP.getFreeHeap());
+    client.setTrustAnchors(&cert);
+    connectWebserver();
+    Serial.printf("Heap after Webserver RECONNECTION with session: %d\n\n\n", ESP.getFreeHeap());
+  }
+  
   if (client.connected()) {
     sendDataToHost();
   } else {
@@ -130,29 +133,18 @@ void loop() {
   }
 
   /* if the server disconnected, stop the client */
-
-  /*
   if (!client.connected()) {
       Serial.println();
       Serial.println("Server disconnected");
       // client.stop();
   }
-  */
 
-  //yield();
-
-  /* shut down to deepsleep mode (NodeMCU: GPIO16[labeledD0] connect to RST)) */
-/*
-  Serial.println("\n\n   *** Shut Down *** \n\n");
-  */
   Serial.println("\n\n   *** Wait *** \n\n");
   delay(5 * 60000);                 // execute once every 5 minutes, don't flood remote service
-  /*delay(1 * 60000);                 // execute once every minute, don't flood remote service
-  // ESP.deepSleep(5 * 60 * 1000000);  // deepsleep for 5 Minutes
-*/
 }
 
 void getCurrentTime () {
+
   /* Get current time */
   // Synchronize time useing SNTP. This is necessary to verify that
   // the TLS certificates offered by the server are currently valid.
@@ -169,8 +161,6 @@ void getCurrentTime () {
   gmtime_r(&now, &timeinfo);
   Serial.print("Current time: ");
   Serial.print(asctime(&timeinfo));
-
-
 }
 
 
@@ -190,7 +180,6 @@ void connectWifiStation() {
                 WiFi.dnsIP(1).toString().c_str());
   // Measure Signal Strength (RSSI) of Wi-Fi connection
  rssi = WiFi.RSSI();
-
 }
 
 
@@ -212,7 +201,6 @@ void startNaptRouting() {
   Serial.printf("Heap before: %d\n", ESP.getFreeHeap());
   // Heap before: 12504
 
-  // @TODO: ip_napt_init() will return -1 if connectWebserver() is called before :(
   err_t ret = ip_napt_init(NAPT, NAPT_PORT);
   Serial.printf("ip_napt_init(%d,%d): ret=%d (OK=%d)\n", NAPT, NAPT_PORT, (int)ret, (int)ERR_OK);
   // ip_napt_init(1000,10): ret=-1 (OK=0)
@@ -231,45 +219,19 @@ void startNaptRouting() {
     Serial.printf("NAPT initialization failed\n");
     // NAPT initialization failed
   }
-
 }
 
-//void copyCertificate() {
-//  
-//  /* copy Dele72.ROOT_CA to local MYROOT_CA */
-//  for (int i = 0; i < sizeof(ROOT_CA); i++) {
-//    MYROOT_CA[i] = ROOT_CA[i]; //copies UserInput in reverse to TempInput
-//    // printf("%c", MYROOT_CA[i]);
-//  }
-//  MYROOT_CA[sizeof(ROOT_CA)] = '\0'; // adds NULL character at end  
-//  //MYROOT_CA[sizeof(MYROOT_CA)] = '\0'; // adds NULL character at end  
-//
-//  }
 
 void connectWebserver() {
 
-  /*
-  // print copied certificate to Serial Monitor
-  for (int i = 0; i < sizeof(MYROOT_CA); i++) {
-    printf("%c", MYROOT_CA[i]);
-  }
-  */
-  // copyCertificate();
-
-
   /* Connect to Server */
   Serial.print("\n\nStarting connection to server: "); Serial.println(HostConstants::DATA_HOST);
-  //Serial.print("\n\n\nCount of MYROOT_CA: "); Serial.println(sizeof(MYROOT_CA)-1);
-  //for (int i = 0; i < sizeof(MYROOT_CA); i++) {
-  //  printf("%c", MYROOT_CA[i]);
-  //}
-
   
   // client.setInsecure();  // https://github.com/esp8266/Arduino/issues/4826#issuecomment-491813938 BUT THEN THE CONNECTION BECOMES INSECURE!
   // client.setFingerprint(fingerprint);  // The use of validating by Fingerprint isn't recommended because the fingerprint will be renewed more often than the certificate and then the fingerprint has to be updated
   client.setCACert(ROOT_CA, sizeof(ROOT_CA)-1); // https://stackoverflow.com/a/56203388
   Serial.println("\n\nCONNECTING...");
-int returnVal = 0;
+  int returnVal = 0;
   returnVal = client.connect(HostConstants::DATA_HOST, HostConstants::SSL_PORT);
   Serial.print("\n\n... returnVal: "); Serial.println(returnVal);
   //if (!client.connect(HostConstants::DATA_HOST, HostConstants::SSL_PORT)) {
@@ -304,10 +266,8 @@ int returnVal = 0;
   } else {
 
     Serial.println("certificate doesn't match");
-
   }
   */
-
 }
 
 
